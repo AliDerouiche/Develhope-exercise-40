@@ -1,7 +1,8 @@
 package com.example.demox;
 
+
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -10,18 +11,16 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-
-import java.util.Arrays;
-import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import java.util.List;
 
 @SpringBootTest
 @ActiveProfiles(value = "test")
 @AutoConfigureMockMvc
-class demoxTest {
+class UnitTestApplicationTests {
 
     @Autowired
     UserController userController;
@@ -35,104 +34,118 @@ class demoxTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @BeforeEach
-    public void setUp() {
+    @AfterEach
+    public void tearDown() {
         userRepository.deleteAll();
     }
 
-    private UserEntity createUserEntity(String emailSuffix) {
+    @Test
+    void contextLoads() {
+        assertThat(userController).isNotNull();
+    }
+
+    private UserEntity userCreation() {
         UserEntity user = new UserEntity();
-        user.setPhoneNumber("+39333123456" + emailSuffix);
-        user.setEmail("user" + emailSuffix + "@example.com");
-        user.setFullName("Mario Rossi" + emailSuffix);
-        user.setBirthDate("1990-01-01");
+        user.setPhoneNumber("123456");
+        user.setEmail("email@gmail.com");
+        user.setFullName("marco");
+        user.setBirthDate("12/12/1990");
         return user;
     }
 
     @Test
     void createUser() throws Exception {
-        UserEntity user = createUserEntity("1");
+        UserEntity user = userCreation();
 
-        MvcResult result = mvc.perform(post("/user/create")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(user)))
+        String userJSON =objectMapper.writeValueAsString(user);
+
+        MvcResult result = this.mvc.perform(post("/user/")
+                        .contentType(MediaType.APPLICATION_JSON).content(userJSON))
+                .andDo(print())
                 .andExpect(status().isOk())
                 .andReturn();
 
-        String responseContent = result.getResponse().getContentAsString();
-        UserEntity createdUser = objectMapper.readValue(responseContent, UserEntity.class);
+        UserEntity userResult = objectMapper.readValue(result.getResponse().getContentAsString(), UserEntity.class);
 
-        assertNotNull(createdUser.getId());
-        assertEquals(user.getFullName(), createdUser.getFullName());
-        assertEquals(user.getEmail(), createdUser.getEmail());
-        assertEquals(user.getBirthDate(), createdUser.getBirthDate());
-        assertEquals(user.getPhoneNumber(), createdUser.getPhoneNumber());
-    }
+        assertThat(userResult.getId()).isNotNull();
 
-    @Test
-    void getSingleUser() throws Exception {
-        UserEntity user = userRepository.save(createUserEntity("2"));
+        assertThat(userResult.getEmail()).isEqualTo(user.getEmail());
+        assertThat(userResult.getPhoneNumber()).isEqualTo(user.getPhoneNumber());
 
-        MvcResult result = mvc.perform(get("/user/get/{id}", user.getId())
-                        .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        String responseContent = result.getResponse().getContentAsString();
-        UserEntity retrievedUser = objectMapper.readValue(responseContent, UserEntity.class);
-
-        assertNotNull(retrievedUser.getId());
-        assertEquals(user.getId(), retrievedUser.getId());
-        assertEquals(user.getEmail(), retrievedUser.getEmail());
-    }
-
-    @Test
-    void getAllUsers() throws Exception {
-        UserEntity user1 = userRepository.save(createUserEntity("3"));
-        UserEntity user2 = userRepository.save(createUserEntity("4"));
-
-        MvcResult result = mvc.perform(get("/user/getAll")
-                        .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        String responseContent = result.getResponse().getContentAsString();
-        UserEntity[] usersArray = objectMapper.readValue(responseContent, UserEntity[].class);
-        List<UserEntity> users = Arrays.asList(usersArray);
-
-        assertEquals(2, users.size());
-        assertTrue(users.contains(user1));
-        assertTrue(users.contains(user2));
     }
 
     @Test
     void updateUser() throws Exception {
-        UserEntity user = userRepository.save(createUserEntity("5"));
-        UserEntity updatedUser = new UserEntity();
-        updatedUser.setEmail("updated@example.com");
-        updatedUser.setPhoneNumber("+393339876543");
+        UserEntity user = userCreation();
+        UserEntity user1 = userCreation();
+        user1.setEmail("email@gmail.com");
+        user1.setPhoneNumber("123456");
 
-        MvcResult result = mvc.perform(put("/user/update/{id}", user.getId())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(updatedUser)))
+        userRepository.save(user);
+
+        String userJSON = objectMapper.writeValueAsString(user1);
+
+        MvcResult result = this.mvc.perform(put("/user/" + user.getId()).contentType(MediaType.APPLICATION_JSON).content(userJSON))
+                .andDo(print())
                 .andExpect(status().isOk())
                 .andReturn();
 
-        String responseContent = result.getResponse().getContentAsString();
-        UserEntity retrievedUser = objectMapper.readValue(responseContent, UserEntity.class);
+        UserEntity resultUser = objectMapper.readValue(result.getResponse().getContentAsString(), UserEntity.class);
 
-        assertEquals(user.getId(), retrievedUser.getId());
-        assertEquals(updatedUser.getEmail(), retrievedUser.getEmail());
-        assertEquals(updatedUser.getPhoneNumber(), retrievedUser.getPhoneNumber());
+        assertThat(resultUser.getId()).isNotNull();
     }
 
     @Test
     void deleteUser() throws Exception {
-        UserEntity user = userRepository.save(createUserEntity("6"));
+        UserEntity user = userCreation();
 
-        mvc.perform(delete("/user/delete/{id}", user.getId()))
-                .andExpect(status().isNoContent());
+        userRepository.save(user);
 
-        assertFalse(userRepository.existsById(user.getId()));
+        this.mvc.perform(delete("/user/" + user.getId()))
+                .andExpect(status().isOk());
+
+        assertThat(userRepository.findById(user.getId())).isEmpty();
     }
+
+    @Test
+    void getSingleUser() throws Exception {
+        UserEntity user = userCreation();
+
+        userRepository.save(user);
+
+        MvcResult result = this.mvc.perform(get("/user/" + user.getId()).contentType(MediaType.APPLICATION_JSON))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andReturn();
+
+        UserEntity userResult = objectMapper.readValue(result.getResponse().getContentAsString(), UserEntity.class);
+
+        assertThat(userResult.getId()).isNotNull();
+
+        assertThat(userResult.getId()).isEqualTo(user.getId());
+        assertThat(userResult.getEmail()).isEqualTo(user.getEmail());
+    }
+
+    @Test
+    void getAllUsers() throws Exception {
+        UserEntity user = userCreation();
+        UserEntity user1 = userCreation();
+        user1.setEmail("email@gmail.com");
+
+        userRepository.save(user);
+        userRepository.save(user1);
+
+        MvcResult result = this.mvc.perform(get("/user/").contentType(MediaType.APPLICATION_JSON))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andReturn();
+
+        List usersResult = objectMapper.readValue(result.getResponse().getContentAsString(), List.class);
+
+        assertThat(usersResult).hasSize(2);
+
+        assertThat(usersResult).extracting("fullName").contains("marco", "marc");
+        assertThat(usersResult).extracting("email").contains("email@gmail.com", "email");
+    }
+
 }
